@@ -210,4 +210,4 @@ SCSimpleBroker.prototype._handleExchangeMessage = function (channel, message, op
   this.emit('message', packet);
 };
 
-module.exports = new SCSimpleBroker();
+module.exports.SCSimpleBroker = SCSimpleBroker;
