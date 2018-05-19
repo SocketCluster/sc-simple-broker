@@ -1,16 +1,6 @@
 var EventEmitter = require('events').EventEmitter;
 var SCChannel = require('sc-channel').SCChannel;
 
-var isEmpty = function (obj) {
-  var i;
-  for (i in obj) {
-    if (obj.hasOwnProperty(i)) {
-      return false;
-    }
-  }
-  return true;
-};
-
 var SimpleExchange = function (broker) {
   this._broker = broker;
   this._channels = {};
@@ -62,8 +52,6 @@ SimpleExchange.prototype.publish = function (channelName, data, callback) {
 };
 
 SimpleExchange.prototype.subscribe = function (channelName) {
-  var self = this;
-
   var channel = this._channels[channelName];
 
   if (!channel) {
@@ -157,7 +145,8 @@ var SCSimpleBroker = function () {
   var self = this;
 
   this._exchangeClient = new SimpleExchange(this);
-  this._channelSubscribers = {};
+  this._clientSubscribers = {};
+  this._clientSubscribersCounter = {};
 
   process.nextTick(function () {
     self.emit('ready');
@@ -171,18 +160,27 @@ SCSimpleBroker.prototype.exchange = function () {
 };
 
 SCSimpleBroker.prototype.subscribeSocket = function (socket, channel, callback) {
-  if (this._channelSubscribers[channel] == null) {
-    this._channelSubscribers[channel] = {};
+  if (!this._clientSubscribers[channel]) {
+    this._clientSubscribers[channel] = {};
+    this._clientSubscribersCounter[channel] = 0;
   }
-  this._channelSubscribers[channel][socket.id] = socket;
+  if (!this._clientSubscribers[channel][socket.id]) {
+    this._clientSubscribersCounter[channel]++;
+  }
+  this._clientSubscribers[channel][socket.id] = socket;
   callback && callback();
 };
 
 SCSimpleBroker.prototype.unsubscribeSocket = function (socket, channel, callback) {
-  if (this._channelSubscribers[channel]) {
-    delete this._channelSubscribers[channel][socket.id];
-    if (isEmpty(this._channelSubscribers[channel])) {
-      delete this._channelSubscribers[channel];
+  if (this._clientSubscribers[channel]) {
+    if (this._clientSubscribers[channel][socket.id]) {
+      this._clientSubscribersCounter[channel]--;
+      delete this._clientSubscribers[channel][socket.id];
+
+      if (this._clientSubscribersCounter[channel] <= 0) {
+        delete this._clientSubscribers[channel];
+        delete this._clientSubscribersCounter[channel];
+      }
     }
   }
   callback && callback();
@@ -199,7 +197,7 @@ SCSimpleBroker.prototype._handleExchangeMessage = function (channel, message, op
     data: message
   };
 
-  var subscriberSockets = this._channelSubscribers[channel];
+  var subscriberSockets = this._clientSubscribers[channel];
 
   for (var i in subscriberSockets) {
     if (subscriberSockets.hasOwnProperty(i)) {
