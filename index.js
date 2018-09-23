@@ -41,7 +41,7 @@ SimpleExchange.prototype._triggerChannelUnsubscribe = function (channel, newStat
   } else {
     channel.state = channel.UNSUBSCRIBED;
   }
-  if (oldState == channel.SUBSCRIBED) {
+  if (oldState === channel.SUBSCRIBED) {
     channel.emit('unsubscribe', channelName);
     EventEmitter.prototype.emit.call(this, 'unsubscribe', channelName);
   }
@@ -59,7 +59,7 @@ SimpleExchange.prototype.subscribe = function (channelName) {
     this._channels[channelName] = channel;
   }
 
-  if (channel.state == channel.UNSUBSCRIBED) {
+  if (channel.state === channel.UNSUBSCRIBED) {
     channel.state = channel.PENDING;
     this._triggerChannelSubscribe(channel);
   }
@@ -70,7 +70,7 @@ SimpleExchange.prototype.unsubscribe = function (channelName) {
   var channel = this._channels[channelName];
 
   if (channel) {
-    if (channel.state != channel.UNSUBSCRIBED) {
+    if (channel.state !== channel.UNSUBSCRIBED) {
       this._triggerChannelUnsubscribe(channel);
     }
   }
@@ -101,10 +101,10 @@ SimpleExchange.prototype.subscriptions = function (includePending) {
       channel = this._channels[channelName];
 
       if (includePending) {
-        includeChannel = channel && (channel.state == channel.SUBSCRIBED ||
-          channel.state == channel.PENDING);
+        includeChannel = channel && (channel.state === channel.SUBSCRIBED ||
+          channel.state === channel.PENDING);
       } else {
-        includeChannel = channel && channel.state == channel.SUBSCRIBED;
+        includeChannel = channel && channel.state === channel.SUBSCRIBED;
       }
 
       if (includeChannel) {
@@ -118,10 +118,10 @@ SimpleExchange.prototype.subscriptions = function (includePending) {
 SimpleExchange.prototype.isSubscribed = function (channelName, includePending) {
   var channel = this._channels[channelName];
   if (includePending) {
-    return !!channel && (channel.state == channel.SUBSCRIBED ||
-      channel.state == channel.PENDING);
+    return !!channel && (channel.state === channel.SUBSCRIBED ||
+      channel.state === channel.PENDING);
   }
-  return !!channel && channel.state == channel.SUBSCRIBED;
+  return !!channel && channel.state === channel.SUBSCRIBED;
 };
 
 SimpleExchange.prototype.watch = function (channelName, handler) {
