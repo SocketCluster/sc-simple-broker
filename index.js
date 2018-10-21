@@ -47,8 +47,8 @@ SimpleExchange.prototype._triggerChannelUnsubscribe = function (channel, newStat
   }
 };
 
-SimpleExchange.prototype.publish = function (channelName, data, callback) {
-  this._broker.publish(channelName, data, callback);
+SimpleExchange.prototype.publish = function (channelName, data) {
+  return this._broker.publish(channelName, data);
 };
 
 SimpleExchange.prototype.subscribe = function (channelName) {
@@ -159,7 +159,7 @@ SCSimpleBroker.prototype.exchange = function () {
   return this._exchangeClient;
 };
 
-SCSimpleBroker.prototype.subscribeSocket = function (socket, channel, callback) {
+SCSimpleBroker.prototype.subscribeSocket = function (socket, channel) {
   if (!this._clientSubscribers[channel]) {
     this._clientSubscribers[channel] = {};
     this._clientSubscribersCounter[channel] = 0;
@@ -168,10 +168,10 @@ SCSimpleBroker.prototype.subscribeSocket = function (socket, channel, callback) 
     this._clientSubscribersCounter[channel]++;
   }
   this._clientSubscribers[channel][socket.id] = socket;
-  callback && callback();
+  return Promise.resolve();
 };
 
-SCSimpleBroker.prototype.unsubscribeSocket = function (socket, channel, callback) {
+SCSimpleBroker.prototype.unsubscribeSocket = function (socket, channel) {
   if (this._clientSubscribers[channel]) {
     if (this._clientSubscribers[channel][socket.id]) {
       this._clientSubscribersCounter[channel]--;
@@ -183,15 +183,15 @@ SCSimpleBroker.prototype.unsubscribeSocket = function (socket, channel, callback
       }
     }
   }
-  callback && callback();
+  return Promise.resolve();
 };
 
-SCSimpleBroker.prototype.publish = function (channelName, data, callback) {
-  this._handleExchangeMessage(channelName, data, callback);
-  callback && callback();
+SCSimpleBroker.prototype.publish = function (channelName, data) {
+  this._handleExchangeMessage(channelName, data);
+  return Promise.resolve();
 };
 
-SCSimpleBroker.prototype._handleExchangeMessage = function (channel, message, options) {
+SCSimpleBroker.prototype._handleExchangeMessage = function (channel, message) {
   var packet = {
     channel: channel,
     data: message
