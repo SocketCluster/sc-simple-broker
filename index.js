@@ -95,23 +95,21 @@ SimpleExchange.prototype.destroyChannel = function (channelName) {
 
 SimpleExchange.prototype.subscriptions = function (includePending) {
   var subs = [];
-  var channel, includeChannel;
-  for (var channelName in this._channels) {
-    if (this._channels.hasOwnProperty(channelName)) {
-      channel = this._channels[channelName];
+  Object.keys(this._channels).forEach((channelName) => {
+    var includeChannel;
+    var channel = this._channels[channelName];
 
-      if (includePending) {
-        includeChannel = channel && (channel.state === channel.SUBSCRIBED ||
-          channel.state === channel.PENDING);
-      } else {
-        includeChannel = channel && channel.state === channel.SUBSCRIBED;
-      }
-
-      if (includeChannel) {
-        subs.push(channelName);
-      }
+    if (includePending) {
+      includeChannel = channel && (channel.state === channel.SUBSCRIBED ||
+        channel.state === channel.PENDING);
+    } else {
+      includeChannel = channel && channel.state === channel.SUBSCRIBED;
     }
-  }
+
+    if (includeChannel) {
+      subs.push(channelName);
+    }
+  });
   return subs;
 };
 
@@ -199,11 +197,9 @@ SCSimpleBroker.prototype._handleExchangeMessage = function (channel, message) {
 
   var subscriberSockets = this._clientSubscribers[channel];
 
-  for (var i in subscriberSockets) {
-    if (subscriberSockets.hasOwnProperty(i)) {
-      subscriberSockets[i].emit('#publish', packet);
-    }
-  }
+  Object.keys(subscriberSockets).forEach((i) => {
+    subscriberSockets[i].transmit('#publish', packet);
+  });
 
   this.emit('message', packet);
 };
