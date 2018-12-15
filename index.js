@@ -195,7 +195,7 @@ SCSimpleBroker.prototype._handleExchangeMessage = function (channel, message) {
     data: message
   };
 
-  var subscriberSockets = this._clientSubscribers[channel];
+  var subscriberSockets = this._clientSubscribers[channel] || {};
 
   Object.keys(subscriberSockets).forEach((i) => {
     subscriberSockets[i].transmit('#publish', packet);
