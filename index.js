@@ -1,6 +1,6 @@
 const AsyncStreamEmitter = require('async-stream-emitter');
 const StreamDemux = require('stream-demux');
-var SCChannel = require('sc-channel').SCChannel;
+var SCChannel = require('sc-channel');
 
 function SimpleExchange(broker) {
   AsyncStreamEmitter.call(this);
