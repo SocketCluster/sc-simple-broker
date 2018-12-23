@@ -1,49 +1,44 @@
-var EventEmitter = require('events').EventEmitter;
+const AsyncStreamEmitter = require('async-stream-emitter');
+const StreamDemux = require('stream-demux');
 var SCChannel = require('sc-channel').SCChannel;
 
-var SimpleExchange = function (broker) {
+function SimpleExchange(broker) {
+  AsyncStreamEmitter.call(this);
+
   this._broker = broker;
-  this._channels = {};
-  this._channelEmitter = new EventEmitter();
-  this._messageHandler = this._handleChannelMessage.bind(this);
+  this._channelMap = {};
+  this._channelEventDemux = new StreamDemux();
+  this._channelDataDemux = new StreamDemux();
 
-  this._broker.on('message', this._messageHandler);
-};
+  (async () => {
+    for await (let {channel, data} of this._broker.listener('message')) {
+      this._channelDataDemux.write(channel, data);
+    }
+  })();
+}
 
-SimpleExchange.prototype = Object.create(EventEmitter.prototype);
+SimpleExchange.prototype = Object.create(AsyncStreamEmitter.prototype);
 
 SimpleExchange.prototype.destroy = function () {
-  this._broker.removeListener('message', this._messageHandler);
-};
-
-SimpleExchange.prototype._handleChannelMessage = function (message) {
-  var channelName = message.channel;
-  if (this.isSubscribed(channelName)) {
-    this._channelEmitter.emit(channelName, message.data);
-  }
+  this._broker.closeAllListeners();
 };
 
 SimpleExchange.prototype._triggerChannelSubscribe = function (channel) {
-  var channelName = channel.name;
+  let channelName = channel.name;
 
-  channel.state = channel.SUBSCRIBED;
+  channel.state = SCChannel.SUBSCRIBED;
 
-  channel.emit('subscribe', channelName);
-  EventEmitter.prototype.emit.call(this, 'subscribe', channelName);
+  this._channelEventDemux.write(`${channelName}/subscribe`, {});
+  this.emit('subscribe', {channel: channelName});
 };
 
-SimpleExchange.prototype._triggerChannelUnsubscribe = function (channel, newState) {
-  var channelName = channel.name;
-  var oldState = channel.state;
+SimpleExchange.prototype._triggerChannelUnsubscribe = function (channel) {
+  let channelName = channel.name;
 
-  if (newState) {
-    channel.state = newState;
-  } else {
-    channel.state = channel.UNSUBSCRIBED;
-  }
-  if (oldState === channel.SUBSCRIBED) {
-    channel.emit('unsubscribe', channelName);
-    EventEmitter.prototype.emit.call(this, 'unsubscribe', channelName);
+  delete this._channelMap[channelName];
+  if (channel.state === SCChannel.SUBSCRIBED) {
+    this._channelEventDemux.write(`${channelName}/unsubscribe`, {});
+    this.emit('unsubscribe', {channel: channelName});
   }
 };
 
@@ -52,61 +47,66 @@ SimpleExchange.prototype.publish = function (channelName, data) {
 };
 
 SimpleExchange.prototype.subscribe = function (channelName) {
-  var channel = this._channels[channelName];
+  let channel = this._channelMap[channelName];
 
   if (!channel) {
-    channel = new SCChannel(channelName, this);
-    this._channels[channelName] = channel;
-  }
-
-  if (channel.state === channel.UNSUBSCRIBED) {
-    channel.state = channel.PENDING;
+    channel = {
+      name: channelName,
+      state: SCChannel.PENDING
+    };
+    this._channelMap[channelName] = channel;
     this._triggerChannelSubscribe(channel);
   }
-  return channel;
+
+  let channelDataStream = this._channelDataDemux.stream(channelName);
+  let channelIterable = new SCChannel(
+    channelName,
+    this,
+    this._channelEventDemux,
+    channelDataStream
+  );
+
+  return channelIterable;
 };
 
 SimpleExchange.prototype.unsubscribe = function (channelName) {
-  var channel = this._channels[channelName];
+  let channel = this._channelMap[channelName];
 
   if (channel) {
-    if (channel.state !== channel.UNSUBSCRIBED) {
-      this._triggerChannelUnsubscribe(channel);
-    }
+    this._triggerChannelUnsubscribe(channel);
   }
 };
 
 SimpleExchange.prototype.channel = function (channelName) {
-  var currentChannel = this._channels[channelName];
+  let currentChannel = this._channelMap[channelName];
 
-  if (!currentChannel) {
-    currentChannel = new SCChannel(channelName, this);
-    this._channels[channelName] = currentChannel;
-  }
-  return currentChannel;
+  let channelDataStream = this._channelDataDemux.stream(channelName);
+  let channelIterable = new SCChannel(
+    channelName,
+    this,
+    this._channelEventDemux,
+    channelDataStream
+  );
+
+  return channelIterable;
 };
 
-SimpleExchange.prototype.destroyChannel = function (channelName) {
-  var channel = this._channels[channelName];
-  channel.unwatch();
-  channel.unsubscribe();
-  delete this._channels[channelName];
+SimpleExchange.prototype.getChannelState = function (channelName) {
+  let channel = this._channelMap[channelName];
+  if (channel) {
+    return channel.state;
+  }
+  return SCChannel.UNSUBSCRIBED;
+};
+
+SimpleExchange.prototype.getChannelOptions = function (channelName) {
+  return {};
 };
 
 SimpleExchange.prototype.subscriptions = function (includePending) {
-  var subs = [];
-  Object.keys(this._channels).forEach((channelName) => {
-    var includeChannel;
-    var channel = this._channels[channelName];
-
-    if (includePending) {
-      includeChannel = channel && (channel.state === channel.SUBSCRIBED ||
-        channel.state === channel.PENDING);
-    } else {
-      includeChannel = channel && channel.state === channel.SUBSCRIBED;
-    }
-
-    if (includeChannel) {
+  let subs = [];
+  Object.keys(this._channelMap).forEach((channelName) => {
+    if (includePending || this._channelMap[channelName].state === SCChannel.SUBSCRIBED) {
       subs.push(channelName);
     }
   });
@@ -114,44 +114,29 @@ SimpleExchange.prototype.subscriptions = function (includePending) {
 };
 
 SimpleExchange.prototype.isSubscribed = function (channelName, includePending) {
-  var channel = this._channels[channelName];
+  let channel = this._channelMap[channelName];
   if (includePending) {
-    return !!channel && (channel.state === channel.SUBSCRIBED ||
-      channel.state === channel.PENDING);
+    return !!channel;
   }
-  return !!channel && channel.state === channel.SUBSCRIBED;
-};
-
-SimpleExchange.prototype.watch = function (channelName, handler) {
-  this._channelEmitter.on(channelName, handler);
-};
-
-SimpleExchange.prototype.unwatch = function (channelName, handler) {
-  if (handler) {
-    this._channelEmitter.removeListener(channelName, handler);
-  } else {
-    this._channelEmitter.removeAllListeners(channelName);
-  }
-};
-
-SimpleExchange.prototype.watchers = function (channelName) {
-  return this._channelEmitter.listeners(channelName);
+  return !!channel && channel.state === SCChannel.SUBSCRIBED;
 };
 
 
-var SCSimpleBroker = function () {
-  var self = this;
+function SCSimpleBroker() {
+  AsyncStreamEmitter.call(this);
 
+  this.isReady = false;
   this._exchangeClient = new SimpleExchange(this);
   this._clientSubscribers = {};
   this._clientSubscribersCounter = {};
 
-  process.nextTick(function () {
-    self.emit('ready');
-  });
-};
+  setTimeout(() => {
+    this.isReady = true;
+    this.emit('ready', {});
+  }, 0);
+}
 
-SCSimpleBroker.prototype = Object.create(EventEmitter.prototype);
+SCSimpleBroker.prototype = Object.create(AsyncStreamEmitter.prototype);
 
 SCSimpleBroker.prototype.exchange = function () {
   return this._exchangeClient;
@@ -185,17 +170,15 @@ SCSimpleBroker.prototype.unsubscribeSocket = function (socket, channel) {
 };
 
 SCSimpleBroker.prototype.publish = function (channelName, data) {
-  this._handleExchangeMessage(channelName, data);
+  this._handleExchangeMessage({
+    channel: channelName,
+    data
+  });
   return Promise.resolve();
 };
 
-SCSimpleBroker.prototype._handleExchangeMessage = function (channel, message) {
-  var packet = {
-    channel: channel,
-    data: message
-  };
-
-  var subscriberSockets = this._clientSubscribers[channel] || {};
+SCSimpleBroker.prototype._handleExchangeMessage = function (packet) {
+  var subscriberSockets = this._clientSubscribers[packet.channel] || {};
 
   Object.keys(subscriberSockets).forEach((i) => {
     subscriberSockets[i].transmit('#publish', packet);
