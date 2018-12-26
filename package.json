@@ -15,7 +15,7 @@
   "license": "MIT",
   "dependencies": {
     "async-stream-emitter": "^1.1.0",
-    "sc-channel": "^1.2.0",
+    "sc-channel": "^2.0.0",
     "stream-demux": "^4.0.4"
   }
 }
