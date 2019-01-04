@@ -184,21 +184,18 @@ SCSimpleBroker.prototype.isSubscribed = function (channelName) {
 };
 
 SCSimpleBroker.prototype.publish = function (channelName, data) {
-  this._handleExchangeMessage({
+  let packet = {
     channel: channelName,
     data
-  });
-  return Promise.resolve();
-};
-
-SCSimpleBroker.prototype._handleExchangeMessage = function (packet) {
-  var subscriberSockets = this._clientSubscribers[packet.channel] || {};
+  };
+  var subscriberSockets = this._clientSubscribers[channelName] || {};
 
   Object.keys(subscriberSockets).forEach((i) => {
     subscriberSockets[i].transmit('#publish', packet);
   });
 
-  this.emit('message', packet);
+  this.emit('publish', packet);
+  return Promise.resolve();
 };
 
 module.exports.SCSimpleBroker = SCSimpleBroker;
