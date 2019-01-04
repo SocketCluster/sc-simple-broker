@@ -142,31 +142,45 @@ SCSimpleBroker.prototype.exchange = function () {
   return this._exchangeClient;
 };
 
-SCSimpleBroker.prototype.subscribeSocket = function (socket, channel) {
-  if (!this._clientSubscribers[channel]) {
-    this._clientSubscribers[channel] = {};
-    this._clientSubscribersCounter[channel] = 0;
+SCSimpleBroker.prototype.subscribeSocket = function (socket, channelName) {
+  if (!this._clientSubscribers[channelName]) {
+    this._clientSubscribers[channelName] = {};
+    this._clientSubscribersCounter[channelName] = 0;
   }
-  if (!this._clientSubscribers[channel][socket.id]) {
-    this._clientSubscribersCounter[channel]++;
+  if (!this._clientSubscribers[channelName][socket.id]) {
+    this._clientSubscribersCounter[channelName]++;
+    this.emit('subscribe', {
+      channel: channelName
+    });
   }
-  this._clientSubscribers[channel][socket.id] = socket;
+  this._clientSubscribers[channelName][socket.id] = socket;
   return Promise.resolve();
 };
 
-SCSimpleBroker.prototype.unsubscribeSocket = function (socket, channel) {
-  if (this._clientSubscribers[channel]) {
-    if (this._clientSubscribers[channel][socket.id]) {
-      this._clientSubscribersCounter[channel]--;
-      delete this._clientSubscribers[channel][socket.id];
+SCSimpleBroker.prototype.unsubscribeSocket = function (socket, channelName) {
+  if (this._clientSubscribers[channelName]) {
+    if (this._clientSubscribers[channelName][socket.id]) {
+      this._clientSubscribersCounter[channelName]--;
+      delete this._clientSubscribers[channelName][socket.id];
 
-      if (this._clientSubscribersCounter[channel] <= 0) {
-        delete this._clientSubscribers[channel];
-        delete this._clientSubscribersCounter[channel];
+      if (this._clientSubscribersCounter[channelName] <= 0) {
+        delete this._clientSubscribers[channelName];
+        delete this._clientSubscribersCounter[channelName];
+        this.emit('unsubscribe', {
+          channel: channelName
+        });
       }
     }
   }
   return Promise.resolve();
+};
+
+SCSimpleBroker.prototype.subscriptions = function () {
+  return Object.keys(this._clientSubscribers);
+};
+
+SCSimpleBroker.prototype.isSubscribed = function (channelName) {
+  return !!this._clientSubscribers[channelName];
 };
 
 SCSimpleBroker.prototype.publish = function (channelName, data) {
