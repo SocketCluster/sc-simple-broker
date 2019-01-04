@@ -11,7 +11,7 @@ function SimpleExchange(broker) {
   this._channelDataDemux = new StreamDemux();
 
   (async () => {
-    for await (let {channel, data} of this._broker.listener('message')) {
+    for await (let {channel, data} of this._broker.listener('publish')) {
       this._channelDataDemux.write(channel, data);
     }
   })();
