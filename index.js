@@ -183,7 +183,7 @@ SCSimpleBroker.prototype.isSubscribed = function (channelName) {
   return !!this._clientSubscribers[channelName];
 };
 
-SCSimpleBroker.prototype.publish = function (channelName, data) {
+SCSimpleBroker.prototype.publish = function (channelName, data, suppressEvent) {
   let packet = {
     channel: channelName,
     data
@@ -194,7 +194,9 @@ SCSimpleBroker.prototype.publish = function (channelName, data) {
     subscriberSockets[i].transmit('#publish', packet);
   });
 
-  this.emit('publish', packet);
+  if (!suppressEvent) {
+    this.emit('publish', packet);
+  }
   return Promise.resolve();
 };
 
