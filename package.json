@@ -1,6 +1,6 @@
 {
   "name": "sc-simple-broker",
-  "version": "3.2.1",
+  "version": "3.2.2",
   "description": "Simple broker engine for socketcluster-server",
   "main": "index.js",
   "scripts": {
